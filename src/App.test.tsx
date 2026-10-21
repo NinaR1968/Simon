@@ -213,21 +213,189 @@ describe('Game flow', () => {
     expect(vi.mocked(startTone).mock.calls.map((c) => c[0])).toEqual(['blue']);
   });
 
-  it('navigating to About mid-game leaves no light, sound or timer and returns to the start state', async () => {
-    colors = ['green'];
-    render(<App />);
-    await startGame();
-    await advance(1300); // mid-presentation
+  describe('pause and resume', () => {
+    const goAbout = async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'אודות' }));
+      await advance(0);
+    };
+    const goHome = () => fireEvent.click(screen.getByRole('button', { name: 'בית' }));
+    const resumeButton = () => screen.queryByRole('button', { name: 'המשך משחק' });
+    const tones = () => vi.mocked(startTone).mock.calls.map((c) => c[0]);
+    const clickResume = async () => {
+      fireEvent.click(resumeButton()!);
+      await advance(0);
+    };
 
-    fireEvent.click(screen.getByRole('button', { name: 'אודות' }));
-    await advance(0);
-    expect(stopAll).toHaveBeenCalled();
-    expect(vi.getTimerCount()).toBe(0);
+    function setVisibility(state: DocumentVisibilityState) {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }
 
-    fireEvent.click(screen.getByRole('button', { name: 'בית' }));
-    expect(stage()).toBe('שלב 1 מתוך 10');
-    expect(screen.getByRole('button', { name: 'התחל משחק' })).toBeInTheDocument();
-    expect(document.querySelector('.quadrant--lit')).toBeNull();
+    afterEach(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+    });
+
+    // Reaches round 2 with the player's turn open.
+    async function reachRound2Input(seq: ColorId[]) {
+      colors = randomQueue(seq);
+      render(<App />);
+      await startGame();
+      await advance(1000 + showTime(1));
+      await playRound([seq[0]]);
+      await advance(2000 + showTime(2));
+      expect(screen.getByText('התור שלך')).toBeInTheDocument();
+    }
+
+    it('navigating to About mid-presentation pauses with no light, sound or timer, and never auto-resumes', async () => {
+      colors = ['green'];
+      render(<App />);
+      await startGame();
+      await advance(1300); // green is lit
+
+      await goAbout();
+      expect(stopAll).toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+
+      goHome();
+      expect(screen.getByText('המשחק מושהה')).toBeInTheDocument();
+      expect(resumeButton()).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'התחל משחק' })).not.toBeInTheDocument();
+      expect(document.querySelector('.quadrant--lit')).toBeNull();
+      expect(document.querySelector('.board--dimmed')).not.toBeNull();
+      expect(quadrant('green')).toBeDisabled();
+      expect(stage()).toBe('שלב 1 מתוך 10');
+
+      vi.mocked(startTone).mockClear();
+      await advance(5000);
+      expect(startTone).not.toHaveBeenCalled();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('resume replays the full sequence of the same round after partial input, then input restarts', async () => {
+      await reachRound2Input(['green', 'blue']);
+      await press('green'); // partial input
+
+      await goAbout();
+      goHome();
+      expect(stage()).toBe('שלב 2 מתוך 10');
+
+      vi.mocked(startTone).mockClear();
+      await clickResume();
+      expect(resumeButton()).not.toBeInTheDocument();
+      expect(screen.getByText('המשחק מציג את הרצף')).toBeInTheDocument();
+      await advance(1000 + showTime(2));
+      expect(tones()).toEqual(['green', 'blue']);
+      expect(stage()).toBe('שלב 2 מתוך 10');
+      expect(screen.getByText('התור שלך')).toBeInTheDocument();
+
+      // Input starts over: the full sequence completes the round.
+      await playRound(['green', 'blue']);
+      await advance(1000);
+      expect(stage()).toBe('שלב 3 מתוך 10');
+    });
+
+    it('after resume, continuing from the old partial input is a mistake', async () => {
+      await reachRound2Input(['green', 'blue']);
+      await press('green');
+      await goAbout();
+      goHome();
+      await clickResume();
+      await advance(1000 + showTime(2));
+
+      await press('blue');
+      await advance(1000);
+      expect(screen.getByRole('dialog')).toHaveTextContent('השלמת שלב אחד');
+    });
+
+    it('hiding the app pauses; becoming visible again does not resume (also on pagehide)', async () => {
+      colors = ['green'];
+      render(<App />);
+      await startGame();
+      await advance(1300);
+
+      setVisibility('hidden');
+      await advance(0);
+      expect(stopAll).toHaveBeenCalled();
+      expect(document.querySelector('.quadrant--lit')).toBeNull();
+      setVisibility('visible');
+      await advance(5000);
+      expect(screen.getByText('המשחק מושהה')).toBeInTheDocument();
+
+      await clickResume();
+      await advance(1000 + showTime(1));
+      expect(screen.getByText('התור שלך')).toBeInTheDocument();
+
+      window.dispatchEvent(new Event('pagehide'));
+      await advance(0);
+      expect(screen.getByText('המשחק מושהה')).toBeInTheDocument();
+    });
+
+    it('leaving right after a wrong press does not pause; the result shows on return', async () => {
+      colors = ['green'];
+      render(<App />);
+      await startGame();
+      await advance(1000 + showTime(1));
+      await press('red');
+
+      await goAbout();
+      setVisibility('hidden');
+      await advance(1000);
+      setVisibility('visible');
+      goHome();
+      expect(screen.getByRole('dialog')).toHaveTextContent('נפסלת!');
+      expect(resumeButton()).not.toBeInTheDocument();
+    });
+
+    it('leaving between rounds pauses the next round and resume shows its full sequence', async () => {
+      colors = randomQueue(['green', 'yellow']);
+      render(<App />);
+      await startGame();
+      await advance(1000 + showTime(1));
+      await press('green'); // round 1 complete
+
+      await goAbout();
+      goHome();
+      expect(stage()).toBe('שלב 2 מתוך 10');
+
+      vi.mocked(startTone).mockClear();
+      await clickResume();
+      await advance(1000 + showTime(2));
+      expect(tones()).toEqual(['green', 'yellow']);
+    });
+
+    it('stays paused with a message when audio cannot resume, and a second try works', async () => {
+      colors = ['green'];
+      render(<App />);
+      await startGame();
+      await goAbout();
+      goHome();
+
+      vi.mocked(unlockAudio).mockResolvedValue(false);
+      vi.mocked(startTone).mockClear();
+      await clickResume();
+      await advance(3000);
+      expect(screen.getByText(/לא ניתן להפעיל צליל. לחצו שוב על „המשך משחק"/)).toBeInTheDocument();
+      expect(startTone).not.toHaveBeenCalled();
+
+      vi.mocked(unlockAudio).mockResolvedValue(true);
+      await clickResume();
+      await advance(1000 + showTime(1));
+      expect(tones()).toEqual(['green']);
+    });
+
+    it('a double click on "המשך משחק" presents the sequence only once', async () => {
+      await reachRound2Input(['green', 'blue']);
+      await goAbout();
+      goHome();
+
+      vi.mocked(startTone).mockClear();
+      const button = resumeButton()!;
+      fireEvent.click(button);
+      fireEvent.click(button);
+      await advance(0);
+      await advance(1000 + showTime(2) + 2000);
+      expect(tones()).toEqual(['green', 'blue']);
+    });
   });
 
   it('stays idle with a message when audio cannot start', async () => {

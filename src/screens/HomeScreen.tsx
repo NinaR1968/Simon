@@ -14,6 +14,8 @@ function statusText({ state, audioError }: Game): string {
       return 'המשחק מציג את הרצף';
     case 'awaitingInput':
       return 'התור שלך';
+    case 'paused':
+      return audioError ? 'לא ניתן להפעיל צליל. לחצו שוב על „המשך משחק".' : 'המשחק מושהה';
     default:
       return '';
   }
@@ -37,8 +39,9 @@ export default function HomeScreen({ game }: Props) {
       <div className="board-wrap">
         <SimonBoard
           litColor={game.litColor}
-          dimmed={state.status === 'presenting'}
+          dimmed={state.status === 'presenting' || state.status === 'paused'}
           inputEnabled={state.status === 'awaitingInput'}
+          paused={state.status === 'paused'}
           onPress={game.press}
         />
         {ended && game.resultVisible && (
@@ -51,7 +54,8 @@ export default function HomeScreen({ game }: Props) {
       </div>
       <div className="action-area">
         {state.status === 'idle' && <PrimaryButton onClick={game.start}>התחל משחק</PrimaryButton>}
-        {state.status === 'awaitingInput' && <p className="hint">הקש על הצבעים לפי הסדר</p>}
+        {state.status === 'paused' && <PrimaryButton onClick={game.resume}>המשך משחק</PrimaryButton>}
+        {state.status === 'awaitingInput' &&<p className="hint">הקש על הצבעים לפי הסדר</p>}
       </div>
     </section>
   );

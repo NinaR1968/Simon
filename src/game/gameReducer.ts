@@ -2,9 +2,9 @@ import type { ColorId } from './colors';
 
 export const MAX_ROUNDS = 10;
 
-export type GameStatus = 'idle' | 'presenting' | 'awaitingInput' | 'won' | 'lost';
+export type GameStatus = 'idle' | 'presenting' | 'awaitingInput' | 'paused' | 'won' | 'lost';
 
-// Which wait precedes a presentation: after "start" or after completing a round.
+// Which wait precedes a presentation: after "start"/"resume" or after completing a round.
 export type Intro = 'start' | 'advance';
 
 export type GameState = {
@@ -24,7 +24,8 @@ export type GameAction =
   | { type: 'presentationDone'; presentationId: number }
   | { type: 'press'; color: ColorId; nextColor: ColorId }
   | { type: 'dismiss' }
-  | { type: 'cancel' };
+  | { type: 'pause' }
+  | { type: 'resume' };
 
 export const initialGameState: GameState = {
   status: 'idle',
@@ -89,10 +90,21 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.status !== 'won' && state.status !== 'lost') return state;
       return reset(state);
 
-    // Temporary Milestone 2 behavior when navigating to About mid-game; replaced by pause in M3.
-    case 'cancel':
+    // Keeps sequence and round, drops partial input; the new id voids the running presentation (ADR-3).
+    case 'pause':
       if (state.status !== 'presenting' && state.status !== 'awaitingInput') return state;
-      return reset(state);
+      return { ...state, status: 'paused', inputIndex: 0, presentationId: state.presentationId + 1 };
+
+    // Replays the full sequence of the same round, with the same lead-in as "start".
+    case 'resume':
+      if (state.status !== 'paused') return state;
+      return {
+        ...state,
+        status: 'presenting',
+        inputIndex: 0,
+        presentationId: state.presentationId + 1,
+        intro: 'start',
+      };
 
     default:
       return state;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import type { ColorId } from './colors';
 import { gameReducer, initialGameState } from './gameReducer';
 import { randomColor } from './random';
@@ -15,6 +15,9 @@ export function useGame() {
   const [revealedId, setRevealedId] = useState(0);
   const [resultVisible, setResultVisible] = useState(false);
   const [audioError, setAudioError] = useState(false);
+  // Read by the stable pause() used in event listeners.
+  const activeRef = useRef(false);
+  activeRef.current = state.status === 'presenting' || state.status === 'awaitingInput';
 
   // Presentation timeline; aborting it (status change, cancel, unmount) stops lights, tones and timers.
   useEffect(() => {
@@ -73,10 +76,34 @@ export function useGame() {
 
   const dismiss = useCallback(() => dispatch({ type: 'dismiss' }), []);
 
-  const cancel = useCallback(() => {
+  // Only an active game pauses; a finished game keeps its pending result message (ARCHITECTURE §2.3 rule 10).
+  const pause = useCallback(() => {
+    if (!activeRef.current) return;
+    activeRef.current = false;
     stopAll();
-    dispatch({ type: 'cancel' });
+    dispatch({ type: 'pause' });
   }, []);
+
+  const resume = useCallback(() => {
+    // Called from the "המשך משחק" click so the AudioContext resumes inside the gesture.
+    void unlockAudio().then((ok) => {
+      setAudioError(!ok);
+      if (ok) dispatch({ type: 'resume' });
+    });
+  }, []);
+
+  // Visibility Handler: hiding the app pauses; becoming visible again never resumes by itself.
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') pause();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pagehide', pause);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pagehide', pause);
+    };
+  }, [pause]);
 
   const holdingCompletedRound =
     state.status === 'presenting' && state.intro === 'advance' && revealedId !== state.presentationId;
@@ -87,11 +114,11 @@ export function useGame() {
     displayRound: holdingCompletedRound ? state.round - 1 : state.round,
     resultVisible,
     audioError,
-    isActive: state.status === 'presenting' || state.status === 'awaitingInput',
     start,
     press,
     dismiss,
-    cancel,
+    pause,
+    resume,
   };
 }
 

@@ -7,6 +7,7 @@ type Props = {
   litColor?: ColorId | null;
   dimmed?: boolean;
   inputEnabled?: boolean;
+  paused?: boolean;
   onPress?: (color: ColorId) => void;
 };
 
@@ -14,7 +15,13 @@ type ActivePress = { color: ColorId; startedAt: number; stopTone: () => void };
 
 // Round board: 2x2 grid of quadrant buttons with a decorative center disc (ADR-1).
 // Player presses react on pointerdown and last max(PRESS_MIN_MS, finger hold) (ADR-2).
-export default function SimonBoard({ litColor = null, dimmed = false, inputEnabled = false, onPress }: Props) {
+export default function SimonBoard({
+  litColor = null,
+  dimmed = false,
+  inputEnabled = false,
+  paused = false,
+  onPress,
+}: Props) {
   const [pressed, setPressed] = useState<ColorId | null>(null);
   const activeRef = useRef<ActivePress | null>(null);
   const releaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -54,6 +61,11 @@ export default function SimonBoard({ litColor = null, dimmed = false, inputEnabl
 
   // Stop any press feedback when the board unmounts (e.g. navigating to About).
   useEffect(() => endPress, []);
+
+  // Hiding the app mid-press pauses the game; drop the held highlight right away.
+  useEffect(() => {
+    if (paused) endPress();
+  }, [paused]);
 
   const handlePointerDown = (color: ColorId) => (event: PointerEvent<HTMLButtonElement>) => {
     if (event.button > 0) return; // primary button / touch only
