@@ -1,0 +1,38 @@
+:root {
+  /* Game colors (Style Guide) */
+  --green: #00d26a;
+  --red: #ff3b30;
+  --yellow: #ffd600;
+  --blue: #00a3ff;
+
+  /* Neutrals */
+  --charcoal: #0f0f0f;
+  --soft-gray: #e5e5e5;
+  --white: #ffffff;
+  --muted: #9fb0c8;
+
+  /* Dark theme surfaces (DESIGN §2.1) */
+  --bg: #0a1628;
+  --surface: #12213a;
+  --border: #1e3556;
+
+  /* Spacing scale */
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-24: 24px;
+
+  /* Radii */
+  --radius-card: 16px;
+  --radius-pill: 999px;
+
+  /* Typography */
+  --font: 'Heebo', Arial, sans-serif;
+  --fs-h1: 32px;
+  --fs-h2: 24px;
+  --fs-h3: 20px;
+  --fs-body: 16px;
+  --fs-caption: 14px;
+
+  --content-max: 480px;
+}

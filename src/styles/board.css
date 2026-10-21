@@ -1,0 +1,83 @@
+/* Round Simon board (ADR-1): LTR 2x2 grid; outer corner of each cell is a quarter circle. */
+.board {
+  position: relative;
+  width: min(80vw, 340px);
+  aspect-ratio: 1;
+  padding: 10px;
+  border: 3px solid var(--border);
+  border-radius: 50%;
+  background: var(--charcoal);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  direction: ltr;
+}
+
+.board-grid {
+  display: grid;
+  grid-template-areas:
+    'top-left top-right'
+    'bottom-left bottom-right';
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+}
+
+.quadrant {
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.quadrant-top-left {
+  grid-area: top-left;
+  border-top-left-radius: 100%;
+}
+
+.quadrant-top-right {
+  grid-area: top-right;
+  border-top-right-radius: 100%;
+}
+
+.quadrant-bottom-left {
+  grid-area: bottom-left;
+  border-bottom-left-radius: 100%;
+}
+
+.quadrant-bottom-right {
+  grid-area: bottom-right;
+  border-bottom-right-radius: 100%;
+}
+
+.quadrant-green {
+  background: var(--green);
+}
+
+.quadrant-red {
+  background: var(--red);
+}
+
+.quadrant-yellow {
+  background: var(--yellow);
+}
+
+.quadrant-blue {
+  background: var(--blue);
+}
+
+/* Decorative center disc; not clickable */
+.board-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 32%;
+  aspect-ratio: 1;
+  border: 4px solid var(--border);
+  border-radius: 50%;
+  background: #0d1a2e;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}

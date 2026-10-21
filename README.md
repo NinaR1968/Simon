@@ -12,4 +12,12 @@
 - [`spec/MILESTONES.md`](spec/MILESTONES.md) – תוכנית הבנייה
 
 ## הרצה
-הוראות ההרצה יתווספו לאחר בניית אבן הדרך הראשונה.
+נדרש Node.js (גרסת LTS).
+
+```bash
+npm install
+npm run dev        # http://localhost:5173/Simon/
+npm run test       # בדיקות אוטומטיות
+npm run typecheck  # בדיקת TypeScript
+npm run build      # בנייה לתיקיית dist/
+```
