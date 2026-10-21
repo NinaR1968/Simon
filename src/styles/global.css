@@ -200,3 +200,61 @@ button {
   color: var(--white);
   font-weight: 700;
 }
+
+.hint {
+  color: var(--muted);
+  font-size: var(--fs-body);
+}
+
+/* ---------- End-of-game overlay ---------- */
+
+.board-wrap {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.result-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.result-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-16);
+  width: 100%;
+  max-width: 360px;
+  padding: var(--space-24) var(--space-16);
+  border: 1px solid var(--blue);
+  border-radius: var(--radius-card);
+  background: rgba(18, 33, 58, 0.96);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+
+.result-title {
+  font-size: var(--fs-h1);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.result-card--won .result-title {
+  color: var(--green);
+}
+
+.result-card--lost .result-title {
+  color: var(--red);
+}
+
+.result-detail {
+  font-size: var(--fs-h3);
+  font-weight: 600;
+  color: var(--soft-gray);
+}

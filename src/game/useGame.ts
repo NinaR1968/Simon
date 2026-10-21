@@ -1,0 +1,98 @@
+import { useCallback, useEffect, useReducer, useState } from 'react';
+import type { ColorId } from './colors';
+import { gameReducer, initialGameState } from './gameReducer';
+import { randomColor } from './random';
+import { playSequence } from './playSequence';
+import { END_DELAY_MS, LEAD_IN_MS, NEXT_ROUND_MS, ROUND_HOLD_MS, sleep } from './timing';
+import { playLose, playWin, stopAll, unlockAudio } from '../audio/audioEngine';
+
+// Game state lives in App so switching screens does not unmount it (ADR-2).
+export function useGame() {
+  const [state, dispatch] = useReducer(gameReducer, initialGameState);
+  const [litColor, setLitColor] = useState<ColorId | null>(null);
+  // Last 'advance' presentation whose new round number was revealed; until then the stage
+  // keeps showing the completed round (derived during render, so no frame shows it early).
+  const [revealedId, setRevealedId] = useState(0);
+  const [resultVisible, setResultVisible] = useState(false);
+  const [audioError, setAudioError] = useState(false);
+
+  // Presentation timeline; aborting it (status change, cancel, unmount) stops lights, tones and timers.
+  useEffect(() => {
+    if (state.status !== 'presenting') return;
+    const controller = new AbortController();
+    const { signal } = controller;
+    const presentationId = state.presentationId;
+
+    (async () => {
+      if (state.intro === 'advance') {
+        await sleep(ROUND_HOLD_MS, signal);
+        setRevealedId(presentationId);
+        await sleep(NEXT_ROUND_MS, signal);
+      } else {
+        await sleep(LEAD_IN_MS, signal);
+      }
+      await playSequence(state.sequence, { signal, onLight: setLitColor });
+      dispatch({ type: 'presentationDone', presentationId });
+    })().catch((error: unknown) => {
+      if (!signal.aborted) throw error;
+    });
+
+    return () => {
+      controller.abort();
+      setLitColor(null);
+    };
+    // A new presentation always comes with a new presentationId.
+  },[state.status, state.presentationId]);
+
+  // The game is already over; only the result message and end sound wait END_DELAY_MS.
+  useEffect(() => {
+    if (state.status !== 'won' && state.status !== 'lost') return;
+    const won = state.status === 'won';
+    const timer = setTimeout(() => {
+      if (won) playWin();
+      else playLose();
+      setResultVisible(true);
+    }, END_DELAY_MS);
+    return () => {
+      clearTimeout(timer);
+      setResultVisible(false);
+    };
+  }, [state.status, state.gameId]);
+
+  const start = useCallback(() => {
+    // unlockAudio runs synchronously up to resume(), so it stays inside the click gesture.
+    void unlockAudio().then((ok) => {
+      setAudioError(!ok);
+      if (ok) dispatch({ type: 'start', firstColor: randomColor() });
+    });
+  }, []);
+
+  const press = useCallback((color: ColorId) => {
+    dispatch({ type: 'press', color, nextColor: randomColor() });
+  }, []);
+
+  const dismiss = useCallback(() => dispatch({ type: 'dismiss' }), []);
+
+  const cancel = useCallback(() => {
+    stopAll();
+    dispatch({ type: 'cancel' });
+  }, []);
+
+  const holdingCompletedRound =
+    state.status === 'presenting' && state.intro === 'advance' && revealedId !== state.presentationId;
+
+  return {
+    state,
+    litColor,
+    displayRound: holdingCompletedRound ? state.round - 1 : state.round,
+    resultVisible,
+    audioError,
+    isActive: state.status === 'presenting' || state.status === 'awaitingInput',
+    start,
+    press,
+    dismiss,
+    cancel,
+  };
+}
+
+export type Game = ReturnType<typeof useGame>;

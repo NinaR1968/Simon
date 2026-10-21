@@ -81,3 +81,40 @@
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
+
+/* ---------- Game states ---------- */
+
+.quadrant {
+  transition: filter 0.08s ease, box-shadow 0.08s ease;
+}
+
+.quadrant:disabled {
+  cursor: default;
+}
+
+/* While the sequence is shown, all quadrants are dimmed except the lit one */
+.board--dimmed .quadrant {
+  filter: brightness(0.45) saturate(0.7);
+}
+
+.board .quadrant--lit {
+  position: relative;
+  z-index: 1;
+  filter: brightness(1.25) saturate(1.1);
+}
+
+.quadrant-green.quadrant--lit {
+  box-shadow: 0 0 28px 6px rgba(0, 210, 106, 0.75);
+}
+
+.quadrant-red.quadrant--lit {
+  box-shadow: 0 0 28px 6px rgba(255, 59, 48, 0.75);
+}
+
+.quadrant-yellow.quadrant--lit {
+  box-shadow: 0 0 28px 6px rgba(255, 214, 0, 0.75);
+}
+
+.quadrant-blue.quadrant--lit {
+  box-shadow: 0 0 28px 6px rgba(0, 163, 255, 0.75);
+}
