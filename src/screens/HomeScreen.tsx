@@ -4,7 +4,7 @@ import ResultOverlay from '../components/ResultOverlay';
 import { MAX_ROUNDS } from '../game/gameReducer';
 import type { Game } from '../game/useGame';
 
-type Props = { game: Game };
+type Props = { game: Game; saveError?: boolean };
 
 function statusText({ state, audioError }: Game): string {
   switch (state.status) {
@@ -21,7 +21,7 @@ function statusText({ state, audioError }: Game): string {
   }
 }
 
-export default function HomeScreen({ game }: Props) {
+export default function HomeScreen({ game, saveError = false }: Props) {
   const { state } = game;
   const ended = state.status === 'won' || state.status === 'lost';
 
@@ -48,6 +48,7 @@ export default function HomeScreen({ game }: Props) {
           <ResultOverlay
             outcome={state.status as 'won' | 'lost'}
             completedRounds={state.completedRounds}
+            saveError={saveError}
             onConfirm={game.dismiss}
           />
         )}

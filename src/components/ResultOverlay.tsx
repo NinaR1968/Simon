@@ -6,6 +6,7 @@ type Props = {
   outcome: 'won' | 'lost';
   completedRounds: number;
   onConfirm: () => void;
+  saveError?: boolean;
 };
 
 const CONFETTI_COLORS = ['#00D26A', '#FF3B30', '#FFD600', '#00A3FF'];
@@ -15,7 +16,7 @@ function completedText(n: number) {
 }
 
 // End-of-game message over the board; confetti on a win only.
-export default function ResultOverlay({ outcome, completedRounds, onConfirm }: Props) {
+export default function ResultOverlay({ outcome, completedRounds, onConfirm, saveError = false }: Props) {
   const won = outcome === 'won';
 
   useEffect(() => {
@@ -40,6 +41,11 @@ export default function ResultOverlay({ outcome, completedRounds, onConfirm }: P
           {won ? 'כל הכבוד! ניצחת!' : 'נפסלת!'}
         </h2>
         {!won && <p className="result-detail">{completedText(completedRounds)}</p>}
+        {saveError && (
+          <p className="error-message" role="status">
+            לא ניתן היה לשמור את התוצאה בהיסטוריה.
+          </p>
+        )}
         <PrimaryButton onClick={onConfirm} autoFocus>
           אישור
         </PrimaryButton>

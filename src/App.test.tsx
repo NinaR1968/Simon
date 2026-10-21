@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import confetti from 'canvas-confetti';
@@ -5,6 +6,7 @@ import App from './App';
 import { randomColor } from './game/random';
 import { playLose, playWin, startTone, stopAll, unlockAudio } from './audio/audioEngine';
 import type { ColorId } from './game/colors';
+import { HISTORY_KEY, createResult, type GameResult } from './history/historyStorage';
 
 vi.mock('./audio/audioEngine', () => ({
   unlockAudio: vi.fn(),
@@ -406,5 +408,193 @@ describe('Game flow', () => {
     expect(screen.getByRole('button', { name: 'התחל משחק' })).toBeInTheDocument();
     await advance(5000);
     expect(startTone).not.toHaveBeenCalled();
+  });
+
+  describe('history', () => {
+    const stored = (): GameResult[] => {
+      const raw = localStorage.getItem(HISTORY_KEY);
+      return raw ? JSON.parse(raw).results : [];
+    };
+    const goAbout = async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'אודות' }));
+      await advance(0);
+    };
+    const goHome = () => fireEvent.click(screen.getByRole('button', { name: 'בית' }));
+    const cards = () => screen.queryAllByRole('listitem').filter((li) => li.classList.contains('history-card'));
+    const blockStorage = (method: 'getItem' | 'setItem' | 'removeItem') =>
+      vi.spyOn(Storage.prototype, method).mockImplementation(() => {
+        throw new Error('blocked');
+      });
+
+    function seed(count: number) {
+      const results = Array.from({ length: count }, (_, i) =>
+        createResult(i % 2 ? 'win' : 'loss', i, new Date(2026, 0, 1, 10, 59 - i)),
+      );
+      localStorage.setItem(HISTORY_KEY, JSON.stringify({ schemaVersion: 1, results }));
+      return results;
+    }
+
+    // Starts a game whose single color is green and presses red.
+    async function loseRound1() {
+      colors = ['green'];
+      await startGame();
+      await advance(1000 + showTime(1));
+      await press('red');
+      await advance(1000);
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('records a loss in round 1 exactly once and shows it in About', async () => {
+      render(<App />);
+      await loseRound1();
+      expect(stored()).toHaveLength(1);
+      expect(stored()[0]).toMatchObject({ completedRounds: 0, outcome: 'loss' });
+
+      // Confirming and switching screens never add a record.
+      fireEvent.click(screen.getByRole('button', { name: 'אישור' }));
+      await goAbout();
+      goHome();
+      await goAbout();
+      expect(stored()).toHaveLength(1);
+      expect(cards()).toHaveLength(1);
+      expect(cards()[0]).toHaveTextContent('שלבים שהושלמו: 0');
+      expect(cards()[0]).toHaveTextContent('תוצאה: הפסד');
+      expect(cards()[0].querySelector('time')).toHaveAttribute('dateTime', stored()[0].finishedAt);
+    });
+
+    it('records a win with 10 completed rounds', async () => {
+      const seq: ColorId[] = ['green', 'red', 'yellow', 'blue', 'green', 'red', 'yellow', 'blue', 'green', 'red'];
+      colors = randomQueue(seq);
+      render(<App />);
+      await startGame();
+      await advance(1000 + showTime(1));
+      for (let round = 1; round <= 10; round++) {
+        await playRound(seq.slice(0, round));
+        if (round < 10) await advance(2000 + showTime(round + 1));
+      }
+      expect(stored()).toHaveLength(1);
+      expect(stored()[0]).toMatchObject({ completedRounds: 10, outcome: 'win' });
+      await goAbout();
+      expect(cards()[0]).toHaveTextContent('תוצאה: ניצחון');
+    });
+
+    it('records the result right away, even when leaving before the message shows', async () => {
+      render(<App />);
+      colors = ['green'];
+      await startGame();
+      await advance(1000 + showTime(1));
+      await press('red');
+      await goAbout();
+      expect(cards()).toHaveLength(1);
+    });
+
+    it('a paused or abandoned game adds no record', async () => {
+      const { unmount } = render(<App />);
+      colors = ['green'];
+      await startGame();
+      await advance(1300);
+      await goAbout();
+      goHome();
+      expect(stored()).toHaveLength(0);
+      unmount(); // like a refresh mid-game
+      render(<App />);
+      expect(stored()).toHaveLength(0);
+    });
+
+    it('records once under React Strict Mode', async () => {
+      render(
+        <StrictMode>
+          <App />
+        </StrictMode>,
+      );
+      await loseRound1();
+      expect(stored()).toHaveLength(1);
+      await goAbout();
+      expect(cards()).toHaveLength(1);
+    });
+
+    it('shows saved results newest first after a reload, and keeps only 10', async () => {
+      const seeded = seed(10);
+      const { unmount } = render(<App />);
+      await goAbout();
+      expect(cards()).toHaveLength(10);
+      expect(cards()[0]).toHaveTextContent('שלבים שהושלמו: 0');
+      expect(cards()[9]).toHaveTextContent('שלבים שהושלמו: 9');
+
+      goHome();
+      await loseRound1();
+      unmount();
+      render(<App />);
+      await goAbout();
+      expect(cards()).toHaveLength(10);
+      expect(stored()).toHaveLength(10);
+      expect(stored()[0].id).not.toBe(seeded[0].id);
+      expect(stored().map((r) => r.id)).not.toContain(seeded[9].id);
+    });
+
+    it('shows an empty state and no delete button without results', async () => {
+      render(<App />);
+      await goAbout();
+      expect(screen.getByText('עדיין אין משחקים שמורים')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'מחק היסטוריה' })).not.toBeInTheDocument();
+    });
+
+    it('cancel keeps the history; delete clears it after confirmation', async () => {
+      seed(3);
+      render(<App />);
+      await goAbout();
+
+      fireEvent.click(screen.getByRole('button', { name: 'מחק היסטוריה' }));
+      const dialog = screen.getByRole('alertdialog');
+      expect(dialog).toHaveTextContent('למחוק את ההיסטוריה?');
+      expect(screen.getByRole('button', { name: 'ביטול' })).toHaveFocus();
+      fireEvent.click(screen.getByRole('button', { name: 'ביטול' }));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(cards()).toHaveLength(3);
+      expect(stored()).toHaveLength(3);
+
+      fireEvent.click(screen.getByRole('button', { name: 'מחק היסטוריה' }));
+      fireEvent.click(screen.getByRole('button', { name: 'מחק' }));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(cards()).toHaveLength(0);
+      expect(localStorage.getItem(HISTORY_KEY)).toBeNull();
+      expect(screen.getByText('עדיין אין משחקים שמורים')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'מחק היסטוריה' })).not.toBeInTheDocument();
+    });
+
+    it('a failed save shows a message but the game goes on', async () => {
+      blockStorage('setItem');
+      render(<App />);
+      await loseRound1();
+      expect(screen.getByRole('dialog')).toHaveTextContent('לא ניתן היה לשמור את התוצאה בהיסטוריה.');
+
+      fireEvent.click(screen.getByRole('button', { name: 'אישור' }));
+      await loseRound1();
+      expect(screen.getByRole('dialog')).toHaveTextContent('נפסלת!');
+    });
+
+    it('unreadable storage shows a message in About and does not block play', async () => {
+      blockStorage('getItem');
+      render(<App />);
+      await goAbout();
+      expect(screen.getByText(/לא ניתן לטעון את היסטוריית המשחקים/)).toBeInTheDocument();
+      goHome();
+      await loseRound1();
+      expect(screen.getByRole('dialog')).toHaveTextContent('נפסלת!');
+    });
+
+    it('a failed delete shows a message and keeps the list', async () => {
+      seed(2);
+      blockStorage('removeItem');
+      render(<App />);
+      await goAbout();
+      fireEvent.click(screen.getByRole('button', { name: 'מחק היסטוריה' }));
+      fireEvent.click(screen.getByRole('button', { name: 'מחק' }));
+      expect(screen.getByText('מחיקת ההיסטוריה נכשלה. נסו שוב.')).toBeInTheDocument();
+      expect(cards()).toHaveLength(2);
+    });
   });
 });
