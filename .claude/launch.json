@@ -2,6 +2,6 @@
   "version": "0.0.1",
   "configurations": [
     { "name": "simon-dev", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev", "--", "--host"], "port": 5173 },
-    { "name": "simon-preview", "runtimeExecutable": "npm", "runtimeArgs": ["run", "preview"], "port": 4173 }
+    { "name": "simon-preview", "runtimeExecutable": "npm", "runtimeArgs": ["run", "preview", "--", "--host"], "port": 4173 }
   ]
 }
